@@ -1,0 +1,5 @@
+region              = "us-east-1"
+environment         = "dev"
+api_container_image = "123456789012.dkr.ecr.us-east-1.amazonaws.com/stock-agent:latest"
+instance_type       = "ml.m5.large"
+cognito_callback_url = "http://localhost:8000/auth/callback"
