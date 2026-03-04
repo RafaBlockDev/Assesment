@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     cognito_user_pool_id: str = ""
     cognito_client_id: str = ""
     cognito_client_secret: str = ""
+    cognito_domain: str = ""
 
     # Bedrock
     bedrock_model_id: str = "anthropic.claude-sonnet-4-20250514"
@@ -25,9 +26,10 @@ class Settings(BaseSettings):
     langfuse_host: str = "https://cloud.langfuse.com"
 
     # App
-    app_env: str = "development"
-    app_debug: bool = True
+    api_title: str = "Amazon Stock Agent"
+    api_environment: str = "development"
     app_port: int = 8000
+    debug: bool = True
     log_level: str = "INFO"
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}

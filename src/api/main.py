@@ -59,8 +59,9 @@ async def lifespan(app: FastAPI):
 # ── App ─────────────────────────────────────────────────────────────
 
 app = FastAPI(
-    title="Stock Query Agent",
+    title=settings.api_title,
     version="0.1.0",
+    debug=settings.debug,
     lifespan=lifespan,
 )
 
@@ -119,6 +120,7 @@ class QueryResponse(BaseModel):
 async def health():
     return {
         "status": "healthy",
+        "environment": settings.api_environment,
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 
@@ -129,13 +131,17 @@ async def health():
 @app.get("/auth/login")
 async def login_redirect():
     """Return the Cognito Hosted UI URL for browser-based login."""
-    pool_id = settings.cognito_user_pool_id
-    region = settings.aws_region
-    client_id = settings.cognito_client_id
-    domain_prefix = pool_id.split("_")[1].lower() if "_" in pool_id else pool_id
+    if settings.cognito_domain:
+        base_url = settings.cognito_domain
+    else:
+        pool_id = settings.cognito_user_pool_id
+        region = settings.aws_region
+        domain_prefix = pool_id.split("_")[1].lower() if "_" in pool_id else pool_id
+        base_url = f"https://{domain_prefix}.auth.{region}.amazoncognito.com"
+
     url = (
-        f"https://{domain_prefix}.auth.{region}.amazoncognito.com/login"
-        f"?client_id={client_id}"
+        f"{base_url}/login"
+        f"?client_id={settings.cognito_client_id}"
         f"&response_type=code"
         f"&scope=openid+email+profile"
         f"&redirect_uri=http://localhost:{settings.app_port}/auth/callback"
