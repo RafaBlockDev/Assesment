@@ -29,10 +29,6 @@ yfinance==0.2.51
 # Document Handling
 pypdf==5.1.0
 
-# Async Support
-asyncio-extras==1.3.2
-aiobotocore==2.15.2
-
 # Utilities
 python-dotenv==1.0.1
 python-multipart==0.0.20
