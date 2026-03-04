@@ -130,11 +130,19 @@ async def run_agent_stream(
     langfuse = get_langfuse()
     trace = langfuse.trace(name="stock_agent", user_id=user_id, input=query)
 
+    # Langfuse callback handler to capture LLM calls and tool invocations
+    from langfuse.callback import CallbackHandler as LangfuseCallbackHandler
+
+    langfuse_handler = LangfuseCallbackHandler(
+        stateful_client=trace,
+    )
+
     app = build_graph()
     input_messages = {"messages": [HumanMessage(content=query)]}
+    config = {"callbacks": [langfuse_handler]}
 
     try:
-        async for event in app.astream(input_messages, stream_mode="updates"):
+        async for event in app.astream(input_messages, stream_mode="updates", config=config):
             for node_name, node_output in event.items():
                 messages = node_output.get("messages", [])
                 for msg in messages:
