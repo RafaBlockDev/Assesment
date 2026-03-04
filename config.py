@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     cognito_domain: str = ""
 
     # Bedrock
-    bedrock_model_id: str = "anthropic.claude-sonnet-4-20250514"
+    bedrock_model_id: str = "anthropic.claude-haiku-4-5-20251001-v1:0"
 
     # Langfuse
     langfuse_public_key: str = ""
