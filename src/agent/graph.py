@@ -73,6 +73,7 @@ def _build_model() -> ChatBedrock:
     return ChatBedrock(
         model_id=settings.bedrock_model_id,
         region_name=settings.aws_region,
+        beta_use_converse_api=True,
         model_kwargs={"temperature": 0, "max_tokens": 4096},
     ).bind_tools(TOOLS)
 

@@ -50,12 +50,18 @@ cp .env.example .env
 Fill in `.env` with your values. At minimum you need:
 
 ```
-AWS_REGION=us-east-1
+AWS_REGION=us-east-2
+AWS_ACCESS_KEY_ID=<your key>
+AWS_SECRET_ACCESS_KEY=<your secret>
 COGNITO_USER_POOL_ID=<from terraform output>
 COGNITO_CLIENT_ID=<from terraform output>
+COGNITO_DOMAIN=<from terraform output>
+BEDROCK_MODEL_ID=us.anthropic.claude-sonnet-4-20250514-v1:0
 LANGFUSE_PUBLIC_KEY=<your key>
 LANGFUSE_SECRET_KEY=<your key>
 ```
+
+> **Note:** `BEDROCK_MODEL_ID` must use an inference profile ID (prefixed with `us.`), not the raw model ID. Run `aws bedrock list-inference-profiles --region us-east-2` to see available options.
 
 ## Deploy to AWS
 
@@ -74,19 +80,28 @@ terraform apply       # type 'yes' to confirm
 After apply you'll get:
 
 ```
-cognito_user_pool_id = "us-east-1_xxxxxxx"
+cognito_user_pool_id = "us-east-2_xxxxxxx"
 cognito_client_id    = "xxxxxxxxxxxxxxxxxxxxxxxxxx"
-cognito_domain       = "https://stock-agent-dev-xxxx.auth.us-east-1.amazoncognito.com"
+cognito_domain       = "https://stock-agent-dev-xxxx.auth.us-east-2.amazoncognito.com"
+s3_documents_bucket  = "stock-agent-dev-documents-xxxx"
 ```
 
 Create a test user:
 
 ```bash
 aws cognito-idp admin-create-user \
+  --region us-east-2 \
   --user-pool-id <POOL_ID> \
   --username testuser@example.com \
   --user-attributes Name=email,Value=testuser@example.com Name=name,Value="Test User" \
   --temporary-password 'TempPass123!'
+
+aws cognito-idp admin-set-user-password \
+  --region us-east-2 \
+  --user-pool-id <POOL_ID> \
+  --username testuser@example.com \
+  --password 'TestPass123!' \
+  --permanent
 ```
 
 ## Run Locally
@@ -94,7 +109,7 @@ aws cognito-idp admin-create-user \
 **Option 1: Python directly**
 
 ```bash
-python3 -m venv venv
+python3.13 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 python -m uvicorn src.api.main:app --reload --port 8000
@@ -110,7 +125,7 @@ Verify it's running:
 
 ```bash
 curl http://localhost:8000/health
-# {"status":"healthy","timestamp":"2025-..."}
+# {"status":"healthy","environment":"development","timestamp":"2026-..."}
 ```
 
 ## Usage
@@ -121,7 +136,7 @@ curl http://localhost:8000/health
 # Get tokens
 curl -X POST http://localhost:8000/auth/token \
   -H "Content-Type: application/json" \
-  -d '{"username":"testuser@example.com","password":"TempPass123!"}'
+  -d '{"username":"testuser@example.com","password":"TestPass123!"}'
 ```
 
 Save the `access_token` from the response.
@@ -217,7 +232,11 @@ aws cognito-idp admin-set-user-password \
 
 **Knowledge base empty** — PDFs failed to download. Either check your internet connection or manually place the PDF files in `docs/documents/`.
 
-**Bedrock access denied** — Make sure your AWS account has Bedrock model access enabled for Claude in the target region. Go to the Bedrock console > Model access > Request access.
+**Bedrock access denied** — Make sure your AWS account has Bedrock model access enabled for Claude in us-east-2. Go to the Bedrock console > Model access > Request access.
+
+**Bedrock ValidationException (on-demand throughput not supported)** — You need to use an inference profile ID, not the raw model ID. Use `us.anthropic.claude-sonnet-4-20250514-v1:0` instead of `anthropic.claude-sonnet-4-20250514-v1:0`. Run `aws bedrock list-inference-profiles --region us-east-2` to find available profiles.
+
+**Auth returns 500 (secret hash received)** — Your Cognito App Client doesn't have a secret but `COGNITO_CLIENT_SECRET` is set in `.env`. Clear it: `COGNITO_CLIENT_SECRET=`.
 
 **Docker build fails on pydantic-core** — You're probably on Python 3.14. The Dockerfile uses 3.11-slim which works fine, but for local dev use `python3.13 -m venv venv` instead.
 
