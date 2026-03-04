@@ -17,9 +17,8 @@ class Settings(BaseSettings):
     cognito_client_secret: str = ""
     cognito_domain: str = ""
 
-    # Anthropic
-    anthropic_api_key: str = ""
-    anthropic_model: str = "claude-sonnet-4-20250514"
+    # Bedrock
+    bedrock_model_id: str = "anthropic.claude-sonnet-4-20250514"
 
     # Langfuse
     langfuse_public_key: str = ""
@@ -49,6 +48,10 @@ def get_boto_session() -> boto3.Session:
         aws_secret_access_key=settings.aws_secret_access_key or None,
     )
 
+
+
+def get_bedrock_client():
+    return get_boto_session().client("bedrock-runtime")
 
 
 def get_cognito_client():
