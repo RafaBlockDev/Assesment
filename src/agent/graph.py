@@ -14,7 +14,7 @@ import logging
 from collections.abc import AsyncGenerator
 from typing import Annotated, Any
 
-from langchain_aws import ChatBedrock
+from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langgraph.graph import END, StateGraph
 from langgraph.graph.message import add_messages
@@ -68,12 +68,13 @@ class AgentState(TypedDict):
 # ── Graph construction ──────────────────────────────────────────────
 
 
-def _build_model() -> ChatBedrock:
+def _build_model() -> ChatAnthropic:
     settings = get_settings()
-    return ChatBedrock(
-        model_id=settings.bedrock_model_id,
-        region_name=settings.aws_region,
-        model_kwargs={"temperature": 0, "max_tokens": 4096},
+    return ChatAnthropic(
+        model=settings.anthropic_model,
+        api_key=settings.anthropic_api_key,
+        temperature=0,
+        max_tokens=4096,
     ).bind_tools(TOOLS)
 
 
