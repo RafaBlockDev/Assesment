@@ -22,6 +22,12 @@ venv/
 .coverage
 htmlcov/
 
+# Terraform
+terraform.tfstate
+terraform.tfstate.backup
+.terraform/
+.terraform.lock.hcl
+
 # Docker
 docker-compose.override.yml
 
