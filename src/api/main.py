@@ -1,20 +1,92 @@
+"""FastAPI application for the Stock Query Agent."""
+
+from __future__ import annotations
+
+import json
 import logging
+import uuid
+from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from typing import Any
 
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, HTTPException, Request, status
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
-from config import get_settings
+from config import get_langfuse, get_settings
+from src.agent.graph import run_agent_stream
 from src.api.auth import CognitoAuth, get_cognito_auth, get_current_user
+from src.knowledge_base.retriever import initialize_knowledge_base
 
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
 settings = get_settings()
-app = FastAPI(title="Stock Query Agent", version="0.1.0")
 
 
-# ── Request / Response models ───────────────────────────────────────
+# ── Lifespan (startup / shutdown) ───────────────────────────────────
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # ── startup ──
+    logging.basicConfig(
+        level=getattr(logging, settings.log_level),
+        format="%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
+    )
+    logger.info("Starting Stock Query Agent …")
+
+    # 1. Knowledge base
+    try:
+        initialize_knowledge_base()
+        logger.info("Knowledge base loaded.")
+    except Exception as e:
+        logger.warning("Knowledge base init failed (non-fatal): %s", e)
+
+    # 2. Langfuse connectivity
+    try:
+        lf = get_langfuse()
+        lf.flush()
+        logger.info("Langfuse connection OK.")
+    except Exception as e:
+        logger.warning("Langfuse not reachable (non-fatal): %s", e)
+
+    yield
+
+    # ── shutdown ──
+    logger.info("Shutting down.")
+
+
+# ── App ─────────────────────────────────────────────────────────────
+
+app = FastAPI(
+    title="Stock Query Agent",
+    version="0.1.0",
+    lifespan=lifespan,
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+# ── Global exception handler ───────────────────────────────────────
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    logger.exception("Unhandled error on %s %s", request.method, request.url.path)
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={"detail": "Internal server error"},
+    )
+
+
+# ── Request / Response models ──────────────────────────────────────
+
 
 class TokenRequest(BaseModel):
     username: str
@@ -30,15 +102,29 @@ class TokenResponse(BaseModel):
 
 
 class QueryRequest(BaseModel):
-    question: str
+    query: str
+    stream: bool = True
 
 
 class QueryResponse(BaseModel):
     answer: str
-    metadata: dict[str, Any] = {}
+    sources: list[str] = []
+    trace_id: str
+
+
+# ── Health ──────────────────────────────────────────────────────────
+
+
+@app.get("/health")
+async def health():
+    return {
+        "status": "healthy",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
 
 
 # ── Auth routes ─────────────────────────────────────────────────────
+
 
 @app.get("/auth/login")
 async def login_redirect():
@@ -74,24 +160,48 @@ async def get_user(current_user: dict = Depends(get_current_user)):
 
 # ── Main query endpoint ────────────────────────────────────────────
 
-@app.post("/query", response_model=QueryResponse)
+
+async def _sse_generator(query: str, user_id: str, trace_id: str):
+    """Yield SSE-formatted events from the agent stream."""
+    async for event in run_agent_stream(query, user_id):
+        event["trace_id"] = trace_id
+        yield f"data: {json.dumps(event)}\n\n"
+    yield f"data: {json.dumps({'type': 'done', 'trace_id': trace_id})}\n\n"
+
+
+@app.post("/query")
 async def query_stock(
     body: QueryRequest,
     current_user: dict = Depends(get_current_user),
 ):
+    """Main endpoint: answer natural-language stock questions.
+
+    If ``stream=true`` (default), returns an SSE stream with incremental
+    agent events.  If ``stream=false``, collects the full answer and
+    returns a single JSON response.
     """
-    Main endpoint: receives a natural-language question about Amazon
-    stock and returns an answer.  Agent logic will be wired here later.
-    """
-    # TODO: replace stub with LangGraph agent invocation
+    user_id = current_user.get("sub") or current_user.get("username", "anonymous")
+    trace_id = str(uuid.uuid4())
+
+    if body.stream:
+        return StreamingResponse(
+            _sse_generator(body.query, user_id, trace_id),
+            media_type="text/event-stream",
+            headers={"X-Trace-Id": trace_id},
+        )
+
+    # Non-streaming: collect all events
+    final_answer = ""
+    sources: list[str] = []
+
+    async for event in run_agent_stream(body.query, user_id):
+        if event["type"] == "final_answer":
+            final_answer = event["content"]
+        elif event["type"] == "observation":
+            sources.append(event["content"][:200])
+
     return QueryResponse(
-        answer=f"Received your question: '{body.question}' — agent coming soon.",
-        metadata={"user": current_user["username"]},
+        answer=final_answer or "No answer produced.",
+        sources=sources,
+        trace_id=trace_id,
     )
-
-
-# ── Health ──────────────────────────────────────────────────────────
-
-@app.get("/health")
-async def health():
-    return {"status": "ok"}
