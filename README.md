@@ -100,7 +100,7 @@ aws cognito-idp admin-set-user-password \
   --region us-east-2 \
   --user-pool-id <POOL_ID> \
   --username testuser@example.com \
-  --password 'TestPass123!' \
+  --password 'TestPass123\!' \
   --permanent
 ```
 
@@ -136,7 +136,7 @@ curl http://localhost:8000/health
 # Get tokens
 curl -X POST http://localhost:8000/auth/token \
   -H "Content-Type: application/json" \
-  -d '{"username":"testuser@example.com","password":"TestPass123!"}'
+  -d '{"username":"testuser@example.com","password":"TestPass123\\!"}'
 ```
 
 Save the `access_token` from the response.

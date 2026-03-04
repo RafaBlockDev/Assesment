@@ -112,13 +112,14 @@ def build_graph() -> StateGraph:
 
 
 async def run_agent_stream(
-    query: str, user_id: str
+    query: str, user_id: str, trace_id: str | None = None
 ) -> AsyncGenerator[dict[str, str], None]:
     """Run the ReAct agent and yield streaming events.
 
     Args:
         query: The user's natural-language question.
         user_id: Identifier for Langfuse tracing.
+        trace_id: Optional trace ID to use in Langfuse (for correlation).
 
     Yields:
         Dicts with keys ``type`` and ``content``:
@@ -128,7 +129,7 @@ async def run_agent_stream(
         - type="final_answer" – the agent's concluding response
     """
     langfuse = get_langfuse()
-    trace = langfuse.trace(name="stock_agent", user_id=user_id, input=query)
+    trace = langfuse.trace(id=trace_id, name="stock_agent", user_id=user_id, input=query)
 
     # Langfuse callback handler to capture LLM calls and tool invocations
     from langfuse.callback import CallbackHandler as LangfuseCallbackHandler

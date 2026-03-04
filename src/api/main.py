@@ -169,7 +169,7 @@ async def get_user(current_user: dict = Depends(get_current_user)):
 
 async def _sse_generator(query: str, user_id: str, trace_id: str):
     """Yield SSE-formatted events from the agent stream."""
-    async for event in run_agent_stream(query, user_id):
+    async for event in run_agent_stream(query, user_id, trace_id=trace_id):
         event["trace_id"] = trace_id
         yield f"data: {json.dumps(event)}\n\n"
     yield f"data: {json.dumps({'type': 'done', 'trace_id': trace_id})}\n\n"
@@ -200,7 +200,7 @@ async def query_stock(
     final_answer = ""
     sources: list[str] = []
 
-    async for event in run_agent_stream(body.query, user_id):
+    async for event in run_agent_stream(body.query, user_id, trace_id=trace_id):
         if event["type"] == "final_answer":
             final_answer = event["content"]
         elif event["type"] == "observation":
